@@ -26,14 +26,12 @@ export function useChat(): UseChatReturn {
         timestamp: new Date().toISOString(),
       };
 
-      // Capture full history including the new user message before any state update
-      const historyWithUser = [...messages, userMsg];
-      setMessages(historyWithUser);
+      setMessages((prev) => [...prev, userMsg]);
       setIsLoading(true);
       setError(null);
 
       try {
-        const res = await sendMessage(historyWithUser, sessionId);
+        const res = await sendMessage([userMsg], sessionId);
         const assistantMsg: Message = {
           id: crypto.randomUUID(),
           role: "assistant",
@@ -47,7 +45,7 @@ export function useChat(): UseChatReturn {
         setIsLoading(false);
       }
     },
-    [messages, sessionId]
+    [sessionId]
   );
 
   const clear = useCallback((): void => {
