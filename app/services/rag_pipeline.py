@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.models import ChatRequest, ChatResponse
@@ -20,6 +21,6 @@ class RAGPipeline:
         """Stream generated tokens as they are produced."""
         raise NotImplementedError
 
-    def _build_context(self, documents: list) -> str:
+    def _build_context(self, documents: list[Any]) -> str:
         """Concatenate retrieved documents into a single context string."""
         raise NotImplementedError

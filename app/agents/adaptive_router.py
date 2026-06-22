@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import MessagesState
+from langgraph.graph.state import CompiledStateGraph
+from pydantic import SecretStr
 
 from app.config import settings
 
@@ -14,15 +19,20 @@ _SYSTEM_PROMPT = (
     "If you are unsure, say so — do not fabricate facts."
 )
 
+_graph: CompiledStateGraph[Any, Any, Any] | None = None
 
-def _build_graph() -> StateGraph:
+
+def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any, Any, Any]:
     llm = ChatAnthropic(
-        model=settings.CLAUDE_ROUTING_MODEL,
-        api_key=settings.ANTHROPIC_API_KEY,
+        model_name=settings.CLAUDE_ROUTING_MODEL,
+        api_key=SecretStr(settings.ANTHROPIC_API_KEY),
+        timeout=None,
+        stop=None,
     )
 
     def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
-        messages: list[BaseMessage] = [SystemMessage(content=_SYSTEM_PROMPT)] + state["messages"]
+        sys_msg: BaseMessage = SystemMessage(content=_SYSTEM_PROMPT)
+        messages: list[BaseMessage] = [sys_msg] + cast(list[BaseMessage], state["messages"])
         response = llm.invoke(messages, config)
         return {"messages": [response]}
 
@@ -30,20 +40,42 @@ def _build_graph() -> StateGraph:
     graph.add_node("agent", call_model)
     graph.set_entry_point("agent")
     graph.add_edge("agent", END)
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
-_graph = _build_graph()
+def init_graph(checkpointer: BaseCheckpointSaver[Any]) -> None:
+    """Compile and register the graph; must be called once during app startup."""
+    global _graph
+    _graph = _build_graph(checkpointer)
 
 
-async def run_agent(messages: list[dict[str, str]], session_id: str = "") -> tuple[str, dict]:
+async def run_agent(
+    messages: list[dict[str, str]], session_id: str = ""
+) -> tuple[str, dict[str, Any]]:
     """Invoke the compiled graph and return (answer_text, usage_metadata)."""
-    lc_messages: list[BaseMessage] = [
-        HumanMessage(content=m["content"]) if m["role"] == "user" else AIMessage(content=m["content"])
-        for m in messages
-    ]
-    config = {"metadata": {"session_id": session_id}} if session_id else {}
+    assert _graph is not None, "init_graph() must be called before run_agent()"
+
+    if session_id:
+        raw = messages[-1]
+        lc_messages: list[BaseMessage] = [
+            HumanMessage(content=raw["content"])
+            if raw["role"] == "user"
+            else AIMessage(content=raw["content"])
+        ]
+        config: RunnableConfig = {
+            "configurable": {"thread_id": session_id},
+            "metadata": {"session_id": session_id},
+        }
+    else:
+        lc_messages = [
+            HumanMessage(content=m["content"])
+            if m["role"] == "user"
+            else AIMessage(content=m["content"])
+            for m in messages
+        ]
+        config = {}
+
     result = await _graph.ainvoke({"messages": lc_messages}, config)
     last: AIMessage = result["messages"][-1]
-    usage = last.usage_metadata or {}
-    return last.content, usage
+    usage: dict[str, Any] = dict(last.usage_metadata) if last.usage_metadata else {}
+    return cast(str, last.content), usage

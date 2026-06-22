@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.agents.adaptive_router import run_agent
+from app.agents.adaptive_router import init_graph, run_agent
 from app.config import settings
 from app.models import ChatRequest, ChatResponse, FeedbackRequest, FeedbackResponse
 
@@ -43,7 +43,25 @@ def _configure_langsmith() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _configure_langsmith()
-    yield
+
+    if settings.DATABASE_URL:
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+        from app.db import close_pool, open_pool
+
+        pool = await open_pool(settings.DATABASE_URL)
+        pg_checkpointer = AsyncPostgresSaver(pool)
+        await pg_checkpointer.setup()
+        init_graph(pg_checkpointer)
+        try:
+            yield
+        finally:
+            await close_pool(pool)
+    else:
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        init_graph(InMemorySaver())
+        yield
 
 
 app = FastAPI(title="AI Agent API", version="0.1.0", lifespan=lifespan)

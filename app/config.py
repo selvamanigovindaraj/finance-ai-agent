@@ -22,10 +22,13 @@ class Settings(BaseSettings):
     LANGCHAIN_API_KEY: str = ""
     LANGCHAIN_PROJECT: str = ""
     LANGCHAIN_ENDPOINT: str = ""
-    LANGSMITH_TRACING: str = ""        # "true" / "false" (new SDK naming)
+    LANGSMITH_TRACING: str = ""  # "true" / "false" (new SDK naming)
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_PROJECT: str = ""
     LANGSMITH_ENDPOINT: str = ""
+
+    # Postgres (optional — falls back to InMemorySaver when empty)
+    DATABASE_URL: str = ""
 
     # App
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]

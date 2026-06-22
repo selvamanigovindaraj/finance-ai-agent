@@ -14,7 +14,7 @@ class PineconeRetriever:
         """
         self.index_name = index_name
         self._client = None  # TODO: initialise pinecone.Pinecone client
-        self._index = None   # TODO: self._client.Index(index_name)
+        self._index = None  # TODO: self._client.Index(index_name)
 
     def retrieve(self, query: str, k: int = 6) -> list[Document]:
         """Run a semantic search and return the top-k matching documents.

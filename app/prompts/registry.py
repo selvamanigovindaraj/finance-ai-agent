@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from langchain_core.prompts import BasePromptTemplate
@@ -10,13 +10,13 @@ class PromptRegistry:
     """Central registry for named prompt templates."""
 
     def __init__(self) -> None:
-        self._store: dict[str, BasePromptTemplate] = {}
+        self._store: dict[str, BasePromptTemplate[Any]] = {}
 
-    def register(self, name: str, template: BasePromptTemplate) -> None:
+    def register(self, name: str, template: BasePromptTemplate[Any]) -> None:
         """Register a prompt template under a given name."""
         raise NotImplementedError
 
-    def get(self, name: str) -> BasePromptTemplate:
+    def get(self, name: str) -> BasePromptTemplate[Any]:
         """Retrieve a registered prompt template by name."""
         raise NotImplementedError
 

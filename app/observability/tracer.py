@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 
 class Tracer:
@@ -14,7 +15,7 @@ class Tracer:
     async def span(self, name: str, **attributes: Any) -> AsyncIterator[None]:
         """Context manager that wraps a pipeline step in a trace span."""
         raise NotImplementedError
-        yield  # noqa: unreachable — satisfies type checker
+        yield  # noqa: RET504 — unreachable yield satisfies type checker
 
     def record_event(self, name: str, payload: dict[str, Any]) -> None:
         """Attach a named event to the current active span."""
