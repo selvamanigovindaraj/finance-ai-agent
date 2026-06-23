@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, cast
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph import END, StateGraph
+from langgraph.graph import StateGraph
 from langgraph.graph.message import MessagesState
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
 from pydantic import SecretStr
 
+from app.agents.tools.financial_data import budget_calc, categorise_expense, get_quote
 from app.config import settings
 
 _SYSTEM_PROMPT = (
@@ -19,16 +22,18 @@ _SYSTEM_PROMPT = (
     "If you are unsure, say so — do not fabricate facts."
 )
 
+_TOOLS = [get_quote, budget_calc, categorise_expense]
+
 _graph: CompiledStateGraph[Any, Any, Any] | None = None
 
 
 def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any, Any, Any]:
     llm = ChatAnthropic(
-        model_name=settings.CLAUDE_ROUTING_MODEL,
+        model_name=settings.CLAUDE_GENERATION_MODEL,
         api_key=SecretStr(settings.ANTHROPIC_API_KEY),
         timeout=None,
         stop=None,
-    )
+    ).bind_tools(_TOOLS)
 
     def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
         sys_msg: BaseMessage = SystemMessage(content=_SYSTEM_PROMPT)
@@ -38,8 +43,10 @@ def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[A
 
     graph = StateGraph(MessagesState)
     graph.add_node("agent", call_model)
+    graph.add_node("tools", ToolNode(_TOOLS, handle_tool_errors=True))
     graph.set_entry_point("agent")
-    graph.add_edge("agent", END)
+    graph.add_conditional_edges("agent", tools_condition)
+    graph.add_edge("tools", "agent")
     return graph.compile(checkpointer=checkpointer)
 
 
@@ -73,7 +80,7 @@ async def run_agent(
             else AIMessage(content=m["content"])
             for m in messages
         ]
-        config = {}
+        config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 
     result = await _graph.ainvoke({"messages": lc_messages}, config)
     last: AIMessage = result["messages"][-1]

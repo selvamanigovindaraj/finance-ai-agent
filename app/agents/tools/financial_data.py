@@ -99,16 +99,12 @@ def _keyword_classify(description: str) -> str | None:
     for category, keywords in _KEYWORDS.items():
         if any(kw in lower for kw in keywords):
             return category
-    # LLM classification could be added here for unmatched descriptions,
-    # but for simplicity unknown categories fall through to "other".
     return None
 
 
 @tool
 def get_quote(ticker: str) -> dict[str, Any]:
     """Fetch the latest quote for a stock ticker."""
-    if not isinstance(ticker, str):
-        raise ToolException("Ticker symbol must be a string.")
     symbol = ticker.strip().upper()
     if not symbol:
         raise ToolException("Ticker symbol must be a non-empty string.")
@@ -142,18 +138,6 @@ def get_quote(ticker: str) -> dict[str, Any]:
         raise
     except Exception as exc:
         raise ToolException(f'Failed to fetch quote for ticker "{symbol}": {exc}') from exc
-
-
-@tool
-def get_financial_statements(ticker: str, period: str = "annual") -> dict[str, Any]:
-    """Retrieve income statement, balance sheet, and cash flow data."""
-    raise ToolException("get_financial_statements is not yet implemented.")
-
-
-@tool
-def get_market_news(query: str, limit: int = 10) -> list[dict[str, Any]]:
-    """Fetch recent market news articles matching the query."""
-    raise ToolException("get_market_news is not yet implemented.")
 
 
 @tool
