@@ -57,3 +57,30 @@ def get_financial_statements(ticker: str, period: str = "annual") -> dict[str, A
 def get_market_news(query: str, limit: int = 10) -> list[dict[str, Any]]:
     """Fetch recent market news articles matching the query."""
     raise ToolException("get_market_news is not yet implemented.")
+
+
+@tool
+def budget_calc(income: float, expenses: dict[str, float]) -> dict[str, Any]:
+    """Compute monthly surplus, savings rate, and per-category expense breakdown."""
+    if income <= 0:
+        raise ToolException("Income must be a positive number.")
+    if not expenses:
+        raise ToolException("Expenses dict must not be empty.")
+
+    total_expenses = sum(expenses.values())
+    monthly_surplus = income - total_expenses
+    savings_rate_pct = round((monthly_surplus / income) * 100, 2)
+
+    breakdown: dict[str, dict[str, float]] = {
+        category: {
+            "amount": round(amount, 2),
+            "pct_of_income": round((amount / income) * 100, 2),
+        }
+        for category, amount in expenses.items()
+    }
+
+    return {
+        "monthly_surplus": round(monthly_surplus, 2),
+        "savings_rate_pct": savings_rate_pct,
+        "breakdown": breakdown,
+    }
