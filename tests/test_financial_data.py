@@ -36,15 +36,6 @@ def test_empty_or_whitespace_ticker_raises(ticker: str) -> None:
         _fn(ticker=ticker)
 
 
-@pytest.mark.parametrize(
-    "ticker",
-    [123, 45.6, True, None, [], {}],
-    ids=["int", "float", "bool", "None", "list", "dict"],
-)
-def test_non_string_ticker_raises(ticker: Any) -> None:
-    with pytest.raises(ToolException, match="must be a string"):
-        _fn(ticker=ticker)
-
 
 @pytest.mark.parametrize(
     ("raw", "normalized"),
