@@ -6,6 +6,103 @@ from typing import Any
 import yfinance as yf
 from langchain_core.tools import ToolException, tool
 
+_KEYWORDS: dict[str, list[str]] = {
+    "housing": [
+        "rent",
+        "mortgage",
+        "landlord",
+        "lease",
+        "property tax",
+        "electricity",
+        "gas bill",
+        "water bill",
+        "home insurance",
+        "maintenance",
+        "repair",
+    ],
+    "food": [
+        "grocery",
+        "groceries",
+        "supermarket",
+        "restaurant",
+        "cafe",
+        "coffee",
+        "pizza",
+        "takeout",
+        "takeaway",
+        "lunch",
+        "dinner",
+        "breakfast",
+        "meal",
+        "dining",
+    ],
+    "transport": [
+        "uber",
+        "lyft",
+        "taxi",
+        "bus",
+        "train",
+        "metro",
+        "subway",
+        "fuel",
+        "petrol",
+        "parking",
+        "car payment",
+        "flight",
+        "airline",
+        "transit",
+        "toll",
+    ],
+    "entertainment": [
+        "netflix",
+        "spotify",
+        "hulu",
+        "disney",
+        "cinema",
+        "movie",
+        "concert",
+        "ticket",
+        "gym",
+        "gaming",
+        "streaming",
+    ],
+    "healthcare": [
+        "doctor",
+        "hospital",
+        "pharmacy",
+        "medicine",
+        "prescription",
+        "dental",
+        "dentist",
+        "vision",
+        "therapy",
+        "health insurance",
+        "medical",
+        "clinic",
+    ],
+    "savings": [
+        "savings",
+        "investment",
+        "401k",
+        "ira",
+        "pension",
+        "retirement",
+        "brokerage",
+        "mutual fund",
+        "etf",
+    ],
+}
+
+
+def _keyword_classify(description: str) -> str | None:
+    lower = description.lower()
+    for category, keywords in _KEYWORDS.items():
+        if any(kw in lower for kw in keywords):
+            return category
+    # LLM classification could be added here for unmatched descriptions,
+    # but for simplicity unknown categories fall through to "other".
+    return None
+
 
 @tool
 def get_quote(ticker: str) -> dict[str, Any]:
@@ -83,4 +180,22 @@ def budget_calc(income: float, expenses: dict[str, float]) -> dict[str, Any]:
         "monthly_surplus": round(monthly_surplus, 2),
         "savings_rate_pct": savings_rate_pct,
         "breakdown": breakdown,
+    }
+
+
+@tool
+def categorise_expense(description: str, amount: float) -> dict[str, Any]:
+    """Classify an expense description into a standard budget category."""
+    stripped = description.strip()
+    if not stripped:
+        raise ToolException("Expense description must not be empty.")
+    if amount < 0:
+        raise ToolException("Expense amount must be non-negative.")
+
+    category = _keyword_classify(stripped) or "other"
+
+    return {
+        "category": category,
+        "description": stripped,
+        "amount": round(amount, 2),
     }
