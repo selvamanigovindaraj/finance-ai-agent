@@ -67,6 +67,9 @@ POST /chat  { messages: [last_user_msg], session_id }
         send full messages list; no checkpointer state used
       _graph.ainvoke({"messages": lc_messages}, config)
         └─ "agent" node      injects system prompt, calls Claude via ChatAnthropic
+        └─ tools_condition   AIMessage has tool_calls? → "tools" node; else → END
+        └─ "tools" node      ToolNode executes the tool, appends ToolMessage to state
+        └─ loops back to "agent" until the LLM responds with no tool calls
   → returns (answer: str, usage: dict)
 ```
 
@@ -95,7 +98,7 @@ The graph is **not** compiled at module import. Instead:
 - **`app/config.py`** — single `Settings` object (pydantic-settings); all env vars go here. `DATABASE_URL = ""` means fall back to `InMemorySaver`. `extra = "ignore"` allows extra shell vars without breaking startup.
 - **`app/db.py`** — `open_pool` / `close_pool` helpers for the psycopg3 async connection pool. Pool uses `autocommit=True` (required for `CREATE INDEX CONCURRENTLY` in `setup()`) and `dict_row` row factory.
 - **`app/models.py`** — all API boundary types (`ChatRequest`, `ChatResponse`, `FeedbackRequest`, etc.). Never use plain `dict` at HTTP boundaries.
-- **`app/agents/adaptive_router.py`** — `init_graph(checkpointer)` compiles and registers the graph; `run_agent(messages, session_id)` invokes it. Intended to be split: routing logic (Haiku classifies query → tool) should be separate from generation. Known pending refactor.
+- **`app/agents/adaptive_router.py`** — `init_graph(checkpointer)` compiles and registers the graph; `run_agent(messages, session_id)` invokes it. Uses `bind_tools(_TOOLS)` + `ToolNode` + `tools_condition` for the ReAct loop. **The `_SYSTEM_PROMPT` must explicitly name each tool and when to call it** — `bind_tools` only makes tools available; Claude will self-answer simple questions unless the prompt instructs otherwise.
 - **`app/components/retriever.py`** — `PineconeRetriever` stub; implement `retrieve()` and `add_documents()` here before wiring into the RAG pipeline.
 - **`app/services/rag_pipeline.py`** — intended orchestrator: retriever → context assembly → LLM. Not yet wired into `/chat`.
 
@@ -108,6 +111,7 @@ The graph is **not** compiled at module import. Instead:
 | `POST /feedback` | Stub — always returns `recorded: true` |
 | Conversation memory | Working — Postgres (`AsyncPostgresSaver`) with `InMemorySaver` fallback |
 | LangSmith tracing | Working — traces grouped by `session_id` in Threads tab |
+| Tools | Working — `get_quote`, `budget_calc`, `categorise_expense` wired via `ToolNode` + `tools_condition`; `handle_tool_errors=True` so `ToolException` is returned to the agent gracefully |
 | RAG pipeline | Stub — retriever, cache all `raise NotImplementedError` |
 | Observability | Stub — cost tracker, feedback store all `raise NotImplementedError` |
 | Security | Stub — input guard, output filter all `raise NotImplementedError` |
@@ -144,3 +148,4 @@ These principles apply to all generated code, in every language:
 - Integration tests hit a real Pinecone test index, not mocks.
 - Stub tests must be marked `@pytest.mark.skip(reason="not yet implemented")` — do not leave bare `raise NotImplementedError` in collected tests.
 - Coverage threshold: currently `0` in `pyproject.toml` while all tests are stubs. Raise back to `80` once real tests are written.
+- When testing `@tool` functions via `.func` (bypassing Pydantic), do **not** add `isinstance` guards in the function body to satisfy those tests. Pydantic rejects invalid types at the tool boundary before the function body is ever reached — the scenario cannot happen in production. Delete the test instead of adding unreachable defensive code.
