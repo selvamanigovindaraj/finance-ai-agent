@@ -9,7 +9,8 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 import app.agents.adaptive_router as _router_mod
-from app.agents.adaptive_router import _DISCLAIMER, init_graph, run_agent
+from app.agents.adaptive_router import init_graph, run_agent
+from app.prompts.templates import AGENT_DISCLAIMER as _DISCLAIMER
 
 _PATCH_LLM = "app.agents.adaptive_router.ChatOpenAI"
 _PATCH_YF = "app.agents.tools.financial_data.yf.Ticker"

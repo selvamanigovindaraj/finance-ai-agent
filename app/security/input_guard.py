@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
+from typing import Literal
 
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
+from pydantic import BaseModel, SecretStr
 
+from app.config import settings
 from app.models import ChatRequest, Message, Role
+from app.prompts.templates import INJECTION_JUDGE_SYSTEM, INJECTION_JUDGE_USER
+
+logger = logging.getLogger(__name__)
 
 _PII_ENTITIES = ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "IBAN_CODE"]
 
@@ -30,6 +39,14 @@ _INJECTION_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
+class InjectionVerdict(BaseModel):
+    """Structured verdict returned by the LLM injection judge."""
+
+    is_injection: bool
+    confidence: Literal["high", "medium", "low"]
+    reason: str
+
+
 class PromptInjectionError(ValueError):
     """Raised when a user message contains a known prompt-injection pattern."""
 
@@ -47,6 +64,7 @@ class InputGuard:
         for msg in request.messages:
             if msg.role == Role.user:
                 self._check_injection(msg.content)
+                await self._check_injection_llm(msg.content)
                 clean = await asyncio.to_thread(self._sanitise, msg.content)
                 sanitised.append(Message(role=msg.role, content=clean))
             else:
@@ -75,6 +93,28 @@ class InputGuard:
         for pattern in _INJECTION_PATTERNS:
             if pattern.search(text):
                 raise PromptInjectionError(f"Prompt injection detected: {pattern.pattern!r}")
+
+    async def _check_injection_llm(self, text: str) -> None:
+        """Call the Deepseek judge; raise PromptInjectionError if injection is detected."""
+        judge = ChatOpenAI(
+            model=settings.DEEPSEEK_MODEL,
+            api_key=SecretStr(settings.DEEPSEEK_API_KEY),
+            base_url=settings.DEEPSEEK_ENDPOINT,
+        ).with_structured_output(InjectionVerdict)
+
+        user_content = INJECTION_JUDGE_USER.format(text=text)
+        try:
+            verdict: InjectionVerdict = await judge.ainvoke(  # type: ignore[assignment]
+                [SystemMessage(content=INJECTION_JUDGE_SYSTEM), HumanMessage(content=user_content)]
+            )
+        except Exception:
+            logger.warning("LLM injection judge failed; falling back to regex-only")
+            return
+
+        if verdict.is_injection:
+            raise PromptInjectionError(
+                f"LLM judge detected injection (confidence={verdict.confidence}): {verdict.reason}"
+            )
 
     def _check_length(self, _text: str) -> None:
         """Raise if the message exceeds the allowed token budget."""

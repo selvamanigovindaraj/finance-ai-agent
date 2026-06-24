@@ -15,24 +15,9 @@ from pydantic import SecretStr
 
 from app.agents.tools.financial_data import budget_calc, categorise_expense, get_quote
 from app.config import settings
-
-_SYSTEM_PROMPT = (
-    "You are a knowledgeable financial assistant. "
-    "You have access to three tools:\n"
-    "  - get_quote: fetch a live stock price — always call this for any stock/ticker question.\n"
-    "  - budget_calc: compute surplus, savings rate, and breakdown — "
-    "always call this for any budget or income/expense question.\n"
-    "  - categorise_expense: classify an expense — "
-    "always call this for any expense categorisation question.\n"
-    "Never perform these calculations or lookups yourself. "
-    "For all other questions, answer clearly and concisely. "
-    "If you are unsure, say so — do not fabricate facts."
-)
+from app.prompts.templates import AGENT_DISCLAIMER, AGENT_SYSTEM_PROMPT
 
 _TOOLS = [get_quote, budget_calc, categorise_expense]
-_DISCLAIMER = (
-    "\n\n⚠️ This is for informational purposes only and does not constitute financial advice."
-)
 
 _graph: CompiledStateGraph[Any, Any, Any] | None = None
 
@@ -43,7 +28,7 @@ def _guardrail_out(state: MessagesState) -> dict[str, list[BaseMessage]]:
     safe_content = raw if isinstance(raw, str) else str(raw)
     disclaimed = AIMessage(
         id=last.id,
-        content=safe_content + _DISCLAIMER,
+        content=safe_content + AGENT_DISCLAIMER,
         usage_metadata=last.usage_metadata,
     )
     return {"messages": [disclaimed]}
@@ -57,7 +42,7 @@ def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[A
     ).bind_tools(_TOOLS)
 
     def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
-        sys_msg: BaseMessage = SystemMessage(content=_SYSTEM_PROMPT)
+        sys_msg: BaseMessage = SystemMessage(content=AGENT_SYSTEM_PROMPT)
         messages: list[BaseMessage] = [sys_msg] + cast(list[BaseMessage], state["messages"])
         response = llm.invoke(messages, config)
         return {"messages": [response]}
