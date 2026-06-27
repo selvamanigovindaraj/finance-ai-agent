@@ -20,8 +20,6 @@ on:
         description: "Max examples (leave blank for all)"
         required: false
         default: ""
-  schedule:
-    - cron: "0 2 * * *"  # 02:00 UTC nightly on main
 
 jobs:
   eval:
