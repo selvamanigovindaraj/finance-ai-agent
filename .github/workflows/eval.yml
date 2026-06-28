@@ -44,15 +44,12 @@ jobs:
       - name: Install deps
         run: uv sync --dev
 
-      - name: Download spaCy model
-        run: uv run python -m spacy download en_core_web_lg --quiet
-
       - name: Run eval
         run: |
           ARGS="--eval-only"
           [ -n "$CATEGORY" ] && ARGS="$ARGS --category $CATEGORY"
           [ -n "$MAX_EXAMPLES" ] && ARGS="$ARGS --max-examples $MAX_EXAMPLES"
-          uv run python scripts/eval.py $ARGS
+          uv run python -X faulthandler scripts/eval.py $ARGS
         env:
           CATEGORY: ${{ inputs.category }}
           MAX_EXAMPLES: ${{ inputs.max_examples }}
@@ -61,3 +58,4 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           REDIS_URL: redis://localhost:6379
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          VECLIB_MAXIMUM_THREADS: 1

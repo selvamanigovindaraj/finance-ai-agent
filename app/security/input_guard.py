@@ -8,6 +8,7 @@ from typing import Any
 from faker import Faker
 from langchain_groq import ChatGroq
 from presidio_analyzer import AnalyzerEngine, RecognizerResult
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 from pydantic import SecretStr
@@ -55,7 +56,13 @@ class InputGuard:
     """Validates and sanitises incoming user messages before processing."""
 
     def __init__(self) -> None:
-        self._analyzer = AnalyzerEngine()
+        _nlp_engine = NlpEngineProvider(
+            nlp_configuration={
+                "nlp_engine_name": "spacy",
+                "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
+            }
+        ).create_engine()
+        self._analyzer = AnalyzerEngine(nlp_engine=_nlp_engine, supported_languages=["en"])
         self._anonymizer = AnonymizerEngine()  # type: ignore[no-untyped-call]
         self._judge = ChatGroq(
             model=settings.GROQ_GUARD_MODEL,

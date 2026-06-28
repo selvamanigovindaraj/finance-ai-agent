@@ -11,7 +11,7 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
-> **SELVAMANI GOVINDARAJ** · [LinkedIn]([https://www.linkedin.com/in/g-selvamani/]) · [GitHub]([https://github.com/selvamanigovindaraj])
+> **SELVAMANI GOVINDARAJ** · [LinkedIn](https://www.linkedin.com/in/g-selvamani/) · [GitHub](https://github.com/selvamanigovindaraj)
 
 A conversational finance assistant built with FastAPI, LangGraph, and Deepseek. It answers questions about stock prices, budgets, and expense categories, remembers what was said across turns, and blocks prompt injection and PII leaks before they reach the model.
 

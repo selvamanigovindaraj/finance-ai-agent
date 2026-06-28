@@ -18,9 +18,6 @@ jobs:
       - name: Install deps
         run: uv sync --dev
 
-      - name: Download spaCy model
-        run: uv run python -m spacy download en_core_web_lg --quiet
-
       - name: Lint
         run: uv run ruff check app tests
 
