@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.core.lifespan import lifespan
-from app.routers import chat, feedback, health
+from app.routers import chat, health
 
 logger = logging.getLogger(__name__)
 
@@ -32,4 +32,3 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(chat.router)
-app.include_router(feedback.router)

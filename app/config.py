@@ -19,11 +19,6 @@ class Settings(BaseSettings):
     DEEPSEEK_MODEL: str = "deepseek-v4-flash"
     DEEPSEEK_ENDPOINT: str = "https://api.deepseek.com"
 
-    # Pinecone
-    PINECONE_API_KEY: str = ""
-    PINECONE_INDEX_NAME: str = "ai-agent-index"
-    PINECONE_ENVIRONMENT: str = "us-east-1-aws"
-
     # Tavily
     TAVILY_API_KEY: str = ""
 

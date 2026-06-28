@@ -13,7 +13,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | PII store | Redis (required) — per-session fake→real mapping across turns |
 | Security / injection | Groq PromptGuard2 (`llama-prompt-guard-2-22m`) — LLM injection judge |
 | Security / PII restore | Groq (`llama-3.1-8b-instant`) — OutputGuard restores redacted values in responses |
-| Vector store | Pinecone (cloud-hosted — no local service) |
 | Web search | Tavily |
 | Observability | LangSmith (tracing + thread grouping) |
 | Evaluation | LangSmith `aevaluate` + Deepseek LLM-as-judge — golden dataset, 5 evaluators |
@@ -39,9 +38,6 @@ make test          # pytest --cov=app
 
 # Run all checks in one shot
 make check         # format → lint → typecheck → test
-
-# Seed Pinecone index (drop docs in data/raw/ first)
-make seed          # uv run python scripts/seed.py
 
 # Evaluation (LangSmith)
 make eval          # seed dataset + run full eval
@@ -121,8 +117,6 @@ The graph is **not** compiled at module import. Instead:
 - **`app/security/input_guard.py`** — `InputGuard.check()` runs three steps in order: (1) fast regex pre-filter against 12 injection patterns, (2) Groq PromptGuard2 judge (`self._judge` — `ChatGroq(model=GROQ_GUARD_MODEL)`) — returns a numeric score string; raises `PromptInjectionError` if `score >= GROQ_INJECTION_THRESHOLD`; fails open on exception so the regex layer already provides a safety net, (3) Presidio PII redaction using Faker-generated realistic fake values (name → fake name, email → fake email, etc.). Presidio's spaCy NER only recognises PERSON entities when names are capitalised — `_sanitise` analyses `text.title()` per-line to preserve char positions. `get_input_guard()` returns the process-wide singleton — always use this instead of `InputGuard()` to avoid creating a new Groq client per call.
 - **`app/security/pii_store.py`** — `PiiStore` wraps a Redis client; `merge(session_id, pairs)` writes `{fake: real}` pairs to a Redis hash (`pii:{session_id}`) with a 24h TTL; `load(session_id)` returns the full accumulated map as `dict[str, str]`. `init_pii_store(redis)` sets the process-wide singleton; `get_pii_store()` returns it with an `assert` guard. `_AnyRedis = Any` — Redis is not generic at runtime.
 - **`app/security/output_filter.py`** — `OutputGuard.restore()` loads the full session PII map from Redis via `pii_store.load(session_id)` (or falls back to `current_pairs` if no session), then calls Groq (`GROQ_RESTORE_MODEL`) to rewrite the LLM response with real values restored. Falls back to `_string_replace(text, mapping)` if Groq fails. `get_output_guard()` returns the process-wide singleton.
-- **`app/components/retriever.py`** — `PineconeRetriever` stub; implement `retrieve()` and `add_documents()` here before wiring into the RAG pipeline.
-- **`app/services/rag_pipeline.py`** — intended orchestrator: retriever → context assembly → LLM. Not yet wired into `/chat`.
 
 ### Evaluation pipeline (`scripts/eval.py`)
 
@@ -162,7 +156,6 @@ Deepseek's OpenAI-compatible endpoint has two constraints not present in the rea
 |---|---|
 | `POST /chat` | Working — LangGraph agent calls Deepseek, multi-turn memory via checkpointer |
 | `GET /health` | Working |
-| `POST /feedback` | Stub — always returns `recorded: true` |
 | Conversation memory | Working — Postgres (`AsyncPostgresSaver`) with `InMemorySaver` fallback |
 | LangSmith tracing | Working — traces grouped by `session_id` in Threads tab |
 | Tools | Working — `get_quote`, `budget_calc`, `categorise_expense` wired via `ToolNode` + `tools_condition`; `handle_tool_errors=True` so `ToolException` is returned to the agent gracefully. `get_quote` error message: `'Unable to fetch a live price for ticker "{symbol}".'`. `categorise_expense` keywords include `"fitness"` → entertainment and `"401(k)"` → savings. |
@@ -170,8 +163,6 @@ Deepseek's OpenAI-compatible endpoint has two constraints not present in the rea
 | PII store (Redis) | Working — `PiiStore` accumulates fake→real maps per session in Redis; mandatory at startup |
 | Security (InputGuard) | Working — regex injection filter + Groq PromptGuard2 judge + Presidio PII redaction (Faker-based fake substitution) |
 | Security (OutputGuard) | Working — `OutputGuard.restore()` reloads full session PII map from Redis; Groq LLM restores real values; string-replace fallback |
-| RAG pipeline | Stub — retriever, cache all `raise NotImplementedError` |
-| Observability | Stub — cost tracker, feedback store all `raise NotImplementedError` |
 | Frontend | Working — chat UI, session management, sends only latest message per turn; displays tool badge and disclaimer footer per assistant message |
 | Evaluation | Working — `scripts/eval.py` seeds `data/golden_dataset.json` (63 examples, 6 categories) to LangSmith dataset `finance-agent-golden-v3` and runs 5 evaluators: `eval_tool_match`, `eval_no_pii_leak`, `eval_injection_refused`, `eval_no_hallucination`, Deepseek LLM-as-judge correctness + relevance. `--category` flag for targeted runs. |
 
@@ -208,7 +199,7 @@ These principles apply to all generated code, in every language:
 
 **Testing**
 - `pytest-asyncio` with `asyncio_mode = "auto"` — no need to mark individual tests.
-- Integration tests hit a real Pinecone test index, not mocks.
+- Integration tests hit real external services, not mocks.
 - Stub tests must be marked `@pytest.mark.skip(reason="not yet implemented")` — do not leave bare `raise NotImplementedError` in collected tests.
 - Coverage threshold: currently `0` in `pyproject.toml` while all tests are stubs. Raise back to `80` once real tests are written.
 - When testing `@tool` functions via `.func` (bypassing Pydantic), do **not** add `isinstance` guards in the function body to satisfy those tests. Pydantic rejects invalid types at the tool boundary before the function body is ever reached — the scenario cannot happen in production. Delete the test instead of adding unreachable defensive code.

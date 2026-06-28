@@ -54,18 +54,3 @@ class ChatResponse(BaseModel):
     sources: list[Source] = []
     session_id: str = ""
     usage: dict[str, Any] = {}
-
-
-class FeedbackRequest(BaseModel):
-    """Thumbs up / down feedback payload."""
-
-    session_id: str
-    message_id: str
-    rating: int = Field(..., ge=-1, le=1, description="-1 = bad, 0 = neutral, 1 = good")
-    comment: str = ""
-
-
-class FeedbackResponse(BaseModel):
-    """Acknowledgement of recorded feedback."""
-
-    recorded: bool
